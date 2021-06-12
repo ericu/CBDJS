@@ -1,2 +1,2 @@
 # CBDJS
-Tool for designing end-grain cutting boards
+This is a simple tool for designing end-grain cutting boards.

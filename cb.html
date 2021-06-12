@@ -1,0 +1,886 @@
+<html>
+<title>Cutting Board Designer JS</title>
+<!--
+This is CBJS, an aid in designing cutting boards.
+Copyright (C) 2013 Eric Uhrhane
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+If you don't have a copy of the license and need one, write to
+the Free Software Foundation, Inc., 51 Franklin Street, Fifth
+Floor, Boston, MA 02110-1301, USA.
+-->
+<head>
+</head>
+<body>
+<style>
+  table { border-spacing: 0; border: 1px solid }
+  th,td { border-style: solid; border: 1px solid }
+  td.action {
+    border: 0px none;
+    border-bottom: 1px solid;
+    border-top: 1px solid;
+    border-right: 1px solid;
+  }
+</style>
+<div style="display: flex; flex-flow: row wrap;">
+  <div style="display: inline; float: left">
+    <div style="display: block; float: left; padding: 4px">
+      <div style="display: inline-block; float:left;">
+        <div style="display: block;">
+          <input type="number" min="0" value=20 id="SBL" style="width: 50px;"
+              class="export" onchange="recalculate()">
+              Source boards length</input></div>
+        <div style="display: block;">
+          <input type="number" min="0" value=1.2 id="SBT"
+              style="width: 50px;" class="export"
+              onchange="recalculate()">Source board thickness</input></div>
+        <div style="display: block;">
+          <input type="number" min="0" value=1.5 id="OBT"
+              style="width: 50px;" class="export"
+              onchange="recalculate()">End-grain board thickness</input></div>
+        <div style="display: block;">
+          <input type="number" min="0" value=.125 step=0.025 id="BK"
+              style="width: 50px;" class="export"
+              onchange="recalculate()">Blade kerf</input></div>
+        <div style="display: block;">
+          <input type=checkbox id="FEO" onchange="recalculate()" class="export">
+            Flip every other layer</input></div>
+        <div style="display: block;">
+          <input type=checkbox checked id="REO" onchange="recalculate()"
+              class="export">
+            Rotate every other layer</input></div>
+        <div style="display: block;">
+          <input type=checkbox id="SO" onchange="recalculate()" class="export">
+            Show black outlines.</input></div>
+      </div>
+      <div style="display: inline-block; float:left; padding: 4px;">
+        <table id="WOOD_INFO" style="display: block; border: none;">
+          <thead>
+            <tr><th>Name</th><th>Color</th></tr>
+          </thead>
+          <tbody id="WOOD_INFO_BODY">
+          </tbody>
+        </table>
+        <button type=button style="display: block"
+            onclick="addDefaultWood()">Add Wood</button>
+      </div>
+      <div style="display: inline-block; float:left; padding: 4px;">
+        <div style="display: block;">
+          Edge-grain board length:
+          <span id="OUTPUT_EDGE_BOARD_LENGTH">0</span></div>
+        <div style="display: block;">
+          End-grain board length:
+          <span id="OUTPUT_END_BOARD_LENGTH">0</span></div>
+        <div style="display: block;">
+          End- or edge-grain board width:
+          <span id="OUTPUT_BOARD_WIDTH">0</span></div>
+        <div style="display: block;">
+          End-grain slices:
+          <span id="OUTPUT_SLICES">0</span></div>
+        <div style="display: block;">
+          End-grain fractional length left over:
+          <span id="OUTPUT_LEFT_OVER">0</span></div>
+        <div style="display: block;">
+          Wood used:
+          <ul id="OUTPUT_WOOD_USED"></ul></div>
+        <div style="display: block;">
+          <button type=button onclick="getURL()" style="display:block;">
+              Get this design as an URL for bookmarking.</button>
+          <span id="OUTPUT_URL" style="display:block;"></span></div>
+      </div>
+    </div>
+    <div style="clear: left;">
+      <table id="LAYER_INFO" style="display: block; border: none;">
+        <thead>
+          <tr><th>Wood</th><th>Width</th><th>Trailing Angle</th></tr>
+        </thead>
+        <tbody id="LAYER_INFO_BODY">
+        </tbody>
+      </table>
+      <button type=button style="display: inline-block"
+          onclick="addDefaultLayer()">Add layer</button>
+      <button type=button style="display: inline-block"
+          onclick="clearAllLayers()">Clear all layers</button>
+    </div>
+  </div>
+  <div style="display: flex; padding: 4px; flex-flow: row wrap; flex: 1">
+    <div style="width: 305;">
+      <div style="display: block; width: 300;">Edge-grain board</div>
+      <svg xmlns="http://www.w3.org/2000/svg" style="display: block; width: 300; height: 300;">
+          <g id="EDGE_GRAIN_G"></g>
+      </svg>
+    </div>
+    <div style="width: 305;">
+      <div style="display: block; width: 300;">End-grain board</div>
+      <svg xmlns="http://www.w3.org/2000/svg" style="display: block; width: 300; height: 300;">
+          <g id="END_GRAIN_G"></g>
+      </svg>
+    </div>
+  </div>
+</div>
+<div style="display: block; float: left; padding: 4px">
+  This is Cutting Board Designer JS version <span id="VERSION_DISPLAY"></span>.
+  You can find the latest version linked from <a
+  href="http://ofb.net/~uranium/projects/">my projects page</a>.
+</div>
+<!--
+<button type=button style="display: inline-block; float: bottom"
+    onclick="recalculate()">Recalculate</button>
+    -->
+<script>
+// TODO: Allow multiple layer templates [multiple panels, in the terminology of
+// "Cutting Board Designer"].  If > 2, what about multiple orders?
+// TODO: Allow manual rotate/flip of individual layers.
+var assertFailed = false;
+function assert(t) {
+  //console.assert(t);
+  if (!t && !assertFailed) {
+    assertFailed = true;
+    throw new Error("Assertion failed.");
+  }
+}
+
+function LayerInfo(woodIndex, width, trailingAngle) {
+  this.woodIndex = woodIndex;
+  this.width = width;
+  // Don't allow on last entry; use previous layerInfo for leadingAngle.
+  this.trailingAngle = trailingAngle;
+}
+
+function WoodInfo(color, name) {
+  this.color = color;
+  this.name = name;
+}
+
+var VERSION = "2.1.0.3";
+
+var DEFAULT_WOODS = [
+  new WoodInfo("#6F0011", "Cherry"),
+  new WoodInfo("#292117", "Ebony"),
+  new WoodInfo("#B56816", "Jatoba"),
+  new WoodInfo("#FDE96D", "Maple"),
+  new WoodInfo("#AF0B7B", "Purpleheart"),
+  new WoodInfo("#4B351A", "Walnut"),
+];
+
+var SCALE = 20;
+var sampleSourceThickness = 1.2;
+
+var SAMPLE_LAYERS = [
+  new LayerInfo(5, 1, 0),
+  new LayerInfo(3, .25, 0),
+  new LayerInfo(5, .25, 0),
+  new LayerInfo(3, .25, 0),
+  new LayerInfo(5, 1, 0),
+  new LayerInfo(1, 0.5, 0),
+  new LayerInfo(3, 1, 0),
+  new LayerInfo(5, .25, 0),
+  new LayerInfo(3, .25, 0),
+  new LayerInfo(5, .25, 0),
+  new LayerInfo(3, 1, 0),
+];
+
+function drawLayer(g, points, color, showOutlines) {
+  var poly = document.createElementNS("http://www.w3.org/2000/svg", 'polygon');
+  poly.setAttribute('points', points);
+  if (showOutlines) {
+    poly.setAttribute('stroke', 'black');
+  }
+  poly.setAttribute('fill', color);
+  g.appendChild(poly);
+}
+
+function generateWoodList(woods) {
+  var sel = document.createElement('select');
+  sel.className = "WOOD_LIST_CLASS";
+  for (var i = 0; i < woods.length; ++i) {
+    var option = document.createElement('option');
+    option.value = i;
+    option.innerHTML = woods[i].name;
+    sel.appendChild(option);
+  }
+  return sel;
+}
+
+// Remember to clone this when using it!
+function getWoodList() {
+  if (!WOOD_LIST) {
+    WOOD_LIST = generateWoodList(getAllWoodInfos());
+  }
+  return WOOD_LIST;
+}
+
+function canRemoveWood(index) {
+  var selections = document.getElementsByClassName("WOOD_LIST_CLASS");
+  // Copy selections to an immutable array.
+  selections = Array.prototype.slice.call(selections);
+  for (var i = 0; i < selections.length; ++i) {
+    if (parseInt(selections[i].value) == index) {
+      alert("That wood is in use at layer " + (i + 1) + ".");
+      return false;
+    }
+  }
+  return true;
+}
+
+function removeWoodFromLists(index) {
+  var woodList = getWoodList();
+  var selections = document.getElementsByClassName("WOOD_LIST_CLASS");
+  // Copy selections to an immutable array.
+  selections = Array.prototype.slice.call(selections);
+  for (var i = 0; i < selections.length; ++i) {
+    var sel = selections[i];
+    var value = parseInt(sel.value);
+    if (value >= index) { // = because we've already removed the wood.
+      --value;
+    }
+    var newSel = woodList.cloneNode(true);
+    newSel.value = "" + value;
+    sel.parentNode.replaceChild(newSel, sel);
+  }
+}
+
+function renameWood(index, name) {
+  WOOD_LIST = null;
+  var selections = document.getElementsByClassName("WOOD_LIST_CLASS");
+  for (var i = 0; i < selections.length; ++i) {
+    selections[i].childNodes[index].innerHTML = name;
+  }
+}
+
+function addWoodToLists(name, index) {
+  WOOD_LIST = null;
+  var selections = document.getElementsByClassName("WOOD_LIST_CLASS");
+  var option = document.createElement('option');
+  option.value = index;
+  option.innerHTML = name;
+  for (var i = 0; i < selections.length; ++i) {
+    selections[i].appendChild(option.cloneNode(true));
+  }
+  return true;
+}
+
+function extractLayerInfoFromDOMElement(tr) {
+  var woodIndex = parseInt(tr.childNodes[0].firstChild.value);
+  var width = parseFloat(tr.childNodes[1].firstChild.value);
+  var trailingAngle = parseFloat(tr.childNodes[2].firstChild.value);
+  return new LayerInfo(woodIndex, width, trailingAngle);
+}
+
+function getAllLayerInfos() {
+  var tbody = document.getElementById('LAYER_INFO_BODY');
+  var infos = [];
+  for (var i = 0; i < tbody.childNodes.length; ++i) {
+    cur = tbody.childNodes[i];
+    if (cur.tagName && cur.tagName.toLowerCase() == 'tr') {
+      infos.push(extractLayerInfoFromDOMElement(cur));
+    }
+  }
+  return infos;
+}
+
+function extractWoodInfoFromDOMElement(tr) {
+  var name = tr.childNodes[0].firstChild.value;
+  var color = tr.childNodes[1].firstChild.value;
+  return new WoodInfo(color, name);
+}
+
+function getAllWoodInfos() {
+  var tbody = document.getElementById('WOOD_INFO_BODY');
+  var infos = [];
+  for (var i = 0; i < tbody.childNodes.length; ++i) {
+    cur = tbody.childNodes[i];
+    if (cur.tagName && cur.tagName.toLowerCase() == 'tr') {
+      infos.push(extractWoodInfoFromDOMElement(cur));
+    }
+  }
+  return infos;
+}
+
+function addDefaultLayer() {
+  addLayerToDOM(0, 1, 0);
+}
+
+function clearAllLayers() {
+  pushNoRecalculate();
+  try {
+    var body = document.getElementById("LAYER_INFO_BODY");
+    body.parentNode.replaceChild(body.cloneNode(false), body);
+  } finally {
+    popNoRecalculate();
+  }
+}
+
+function addDefaultWood() {
+  addWoodToDOM("New Wood", "#808080");
+}
+
+var numWoods = 0;
+var WOOD_LIST = null;
+function addWoodToDOM(name, color) {
+  function getWoodIndex(tr) {
+    var woodIndex = 0;
+    var table = tr.parentNode;
+    var child = table.firstChild;
+    while (child != tr) {
+      if (child && child.tagName &&
+          child.tagName.toLowerCase() == 'tr') {
+        ++woodIndex;
+      }
+      child = child.nextSibling;
+    }
+    assert(woodIndex < table.childNodes.length);
+    return woodIndex;
+  }
+  function removeHandler(event) {
+    var tr = event.target.parentNode.parentNode;
+    var table = tr.parentNode;
+    var woodIndex = getWoodIndex(tr);
+    if (canRemoveWood(woodIndex)) {
+      WOOD_LIST = null;
+      table.removeChild(tr);
+      --numWoods;
+      removeWoodFromLists(woodIndex);
+    }
+  }
+  function colorChangeHandler(event) {
+    suggestRecalc();
+  }
+  function renameHandler(event) {
+    var tr = event.target.parentNode.parentNode;
+    var woodIndex = getWoodIndex(tr);
+    WOOD_LIST = null;
+    renameWood(woodIndex, event.target.value);
+  }
+  var newRow = document.createElement('tr');
+  var td = document.createElement('td');
+  var field = document.createElement('input');
+  field.type = 'text';
+  field.value = name;
+  field.addEventListener('change', renameHandler);
+  td.appendChild(field);
+  newRow.appendChild(td);
+
+  td = document.createElement('td');
+  field = document.createElement('input');
+  field.type = 'color';
+  field.value = color;
+  field.style.width = "100px"
+  field.addEventListener('change', colorChangeHandler);
+  td.appendChild(field);
+  newRow.appendChild(td);
+
+  td = document.createElement('td');
+  td.className = "action";
+  var button = document.createElement('button');
+  button.innerHTML = "Remove";
+  button.type = "button";
+  button.addEventListener('click', removeHandler);
+  td.appendChild(button);
+  newRow.appendChild(td);
+
+  var body = document.getElementById("WOOD_INFO_BODY");
+  body.appendChild(newRow);
+  WOOD_LIST = null;
+  addWoodToLists(name, numWoods++);
+}
+
+// Really only needed as such for bookmarking, but it's good as a DOM
+// manipulation scratchpad.
+function addLayerToDOM(woodIndex, width, trailingAngle, position) {
+  pushNoRecalculate();
+  try {
+    function removeHandler(event) {
+      pushNoRecalculate();
+      try {
+        var tr = event.target.parentNode.parentNode;
+        var table = tr.parentNode;
+        table.removeChild(tr);
+      } finally {
+        popNoRecalculate();
+      }
+    }
+    function insertHandler(event) {
+      pushNoRecalculate();
+      try {
+        var tr = event.target.parentNode.parentNode;
+        addLayerToDOM(0, 1, 0, tr);
+      } finally {
+        popNoRecalculate();
+      }
+    }
+    function moveUpHandler(event) {
+      pushNoRecalculate();
+      try {
+        var tr = event.target.parentNode.parentNode;
+        var table = tr.parentNode;
+        if (tr.previousSibling && tr.previousSibling.tagName &&
+            tr.previousSibling.tagName.toLowerCase() == 'tr') {
+          table.insertBefore(tr, tr.previousSibling);
+        }
+      } finally {
+        popNoRecalculate();
+      }
+    }
+    function changeHandler(event) {
+      suggestRecalc();
+    }
+    function moveDownHandler(event) {
+      pushNoRecalculate();
+      try {
+        var tr = event.target.parentNode.parentNode;
+        var table = tr.parentNode;
+        if (tr.nextSibling && tr.nextSibling.tagName.toLowerCase() == 'tr') {
+          table.insertBefore(tr.nextSibling, tr);
+        }
+      } finally {
+        popNoRecalculate();
+      }
+    }
+
+    var newRow = document.createElement('tr');
+    var td = document.createElement('td');
+    var list = getWoodList().cloneNode(true);
+    list.value = woodIndex;
+    list.addEventListener('change', changeHandler);
+    td.appendChild(list);
+    newRow.appendChild(td);
+
+    td = document.createElement('td');
+    var field = document.createElement('input');
+    field.type = 'number';
+    field.value = width;
+    field.step = 0.25;
+    field.min = 0;
+    field.style.width = "75px";
+    field.addEventListener('change', changeHandler);
+    td.appendChild(field);
+    newRow.appendChild(td);
+
+    td = document.createElement('td');
+    field = document.createElement('input');
+    field.type = 'number';
+    field.value = trailingAngle;
+    field.step = 1;
+    field.min = -89;
+    field.max = 89;
+    field.style.width = "75px";
+    field.addEventListener('change', changeHandler);
+    td.appendChild(field);
+    newRow.appendChild(td);
+
+    td = document.createElement('td');
+    td.className = "action";
+    var button = document.createElement('button');
+    button.innerHTML = "Remove";
+    button.type = "button";
+    button.addEventListener('click', removeHandler);
+    td.appendChild(button);
+    newRow.appendChild(td);
+
+    td = document.createElement('td');
+    td.className = "action";
+    button = document.createElement('button');
+    button.innerHTML = "Insert Layer";
+    button.type = "button";
+    button.addEventListener('click', insertHandler);
+    td.appendChild(button);
+    newRow.appendChild(td);
+
+    td = document.createElement('td');
+    td.className = "action";
+    button = document.createElement('button');
+    button.innerHTML = "Move Up";
+    button.type = "button";
+    button.addEventListener('click', moveUpHandler);
+    td.appendChild(button);
+    newRow.appendChild(td);
+
+    td = document.createElement('td');
+    td.className = "action";
+    button = document.createElement('button');
+    button.innerHTML = "Move Down";
+    button.type = "button";
+    button.addEventListener('click', moveDownHandler);
+    td.appendChild(button);
+    newRow.appendChild(td);
+
+    var body = document.getElementById("LAYER_INFO_BODY");
+    if (body.hasChildNodes()) {
+      if (position) {
+        body.insertBefore(newRow, position);
+      } else { // Assume number.
+        body.appendChild(newRow);
+      }
+    } else {
+      body.appendChild(newRow);
+    }
+  } finally {
+    popNoRecalculate();
+  }
+}
+
+function clearDrawing() {
+  var svgG = document.getElementById('END_GRAIN_G');
+  svgG.parentNode.replaceChild(svgG.cloneNode(false), svgG);
+  svgG = document.getElementById('EDGE_GRAIN_G');
+  svgG.parentNode.replaceChild(svgG.cloneNode(false), svgG);
+}
+
+function outputWoodUsed(woodUsed, woodInfos) {
+  var ul = document.getElementById("OUTPUT_WOOD_USED");
+  ul.parentNode.replaceChild(ul.cloneNode(false), ul);
+  ul = document.getElementById("OUTPUT_WOOD_USED");
+  for (var i in woodUsed) {
+    var li = document.createElement('li');
+    var wu = woodUsed[i];
+    li.innerHTML = woodInfos[i].name + ': ' + wu.used.toPrecision(4) +
+        " (" + wu.wasted.toFixed(3) + " lost to kerf or scraps).";
+    ul.appendChild(li);
+  }
+}
+
+// Draw each layer, flipping as appropriate, and taking into account diagonal
+// cuts.
+function drawLayers(layerInfos, woodInfos) {
+  clearDrawing();
+  if (!layerInfos.length) {
+    return;
+  }
+
+  var sourceLength =
+      parseFloat(document.getElementById("SBL").value);
+  var sourceThickness =
+      parseFloat(document.getElementById("SBT").value);
+  var endgrainThickness =
+      parseFloat(document.getElementById("OBT").value);
+  var kerf = parseFloat(document.getElementById("BK").value);
+  var showOutlines = document.getElementById("SO").checked;
+  var scaledEdgeGrainLength = sourceLength * SCALE;
+
+  // This counts one extra kerf; the following if fixes it if relevant.
+  var endgrainLayers = Math.floor(sourceLength / (endgrainThickness + kerf));
+  if (endgrainThickness * (endgrainLayers + 1) + endgrainLayers * kerf
+      <= sourceLength) {
+    ++endgrainLayers;
+  }
+  var endgrainLength = endgrainLayers * sourceThickness;
+  var endgrainLeftover = sourceLength -
+      (endgrainLayers * endgrainThickness + (endgrainLayers - 1) * kerf);
+
+  var svgEndG = document.getElementById('END_GRAIN_G');
+  var svgEdgeG = document.getElementById('EDGE_GRAIN_G');
+  var leftY = 0;
+  var rightY = 0;
+  var leftX = 0;
+  var rightX = sourceThickness * SCALE;
+  var layerTemplate =
+      document.createElementNS("http://www.w3.org/2000/svg", 'g');
+  var woodUsed = [];
+  for (var i = 0; i < layerInfos.length; ++i) {
+    var layerInfo = layerInfos[i];
+    var newLeftY = leftY + layerInfo.width * SCALE;
+    var newRightY = leftY +
+        (layerInfo.width +
+         sourceThickness * Math.tan(layerInfo.trailingAngle * Math.PI / 180)
+        ) * SCALE;
+    if (newRightY < rightY) {
+      alert("The trailing angle of layer " + (i + 1) +
+          " is too low, or the trailing angle of layer " + i +
+          " is too high.  This causes a bad cut.");
+    }
+    var points = "";
+    points += leftX + "," + leftY + " ";
+    points += leftX + "," + newLeftY + " ";
+    points += rightX + "," + newRightY + " ";
+    points += rightX + "," + rightY;
+    drawLayer(layerTemplate, points, woodInfos[layerInfo.woodIndex].color,
+        showOutlines);
+    points = "0," + leftY + " ";
+    points += "0," + newLeftY + " ";
+    points += scaledEdgeGrainLength + "," + newLeftY + " ";
+    points += scaledEdgeGrainLength + "," + leftY + " ";
+    drawLayer(svgEdgeG, points, woodInfos[layerInfo.woodIndex].color,
+        showOutlines);
+    if (!woodUsed[layerInfo.woodIndex]) {
+      woodUsed[layerInfo.woodIndex] = { used: 0, wasted: 0 };
+    }
+    woodUsed[layerInfo.woodIndex].used += kerf +
+        (Math.max(newLeftY, newRightY) - Math.min(leftY, rightY)) / SCALE;
+    woodUsed[layerInfo.woodIndex].wasted += kerf +
+        (Math.abs(newLeftY - newRightY) + Math.abs(leftY - rightY)) / SCALE;
+    leftY = newLeftY;
+    rightY = newRightY;
+  }
+  var flip = document.getElementById("FEO").checked;
+  var rotate = document.getElementById("REO").checked;
+  for (var i = 0; i < endgrainLayers; ++i) {
+    var layer = layerTemplate.cloneNode(true);
+    var transform = 'translate(' + (i * sourceThickness * SCALE) + ',0)';
+    if ((i % 2) && rotate) {
+      var rX = rightX / 2;
+      var rY = leftY / 2;
+      transform += ',rotate(180,' + rX + ',' + rY + ')';
+    }
+    if ((i % 2) && flip) {
+      var rX = rightX / 2;
+      var rY = leftY / 2;
+      var flipTransform = 'translate(' + rX + ',' + rY + '),' +
+          'scale(-1,1),' +
+          'translate(' + -rX + ',' + -rY + ')';
+      transform = transform + ',' + flipTransform;
+    }
+    layer.setAttribute('transform', transform);
+    svgEndG.appendChild(layer);
+  }
+  var scaledBoardWidth = Math.max(leftY, rightY);
+  var scaledEndGrainLength = rightX * endgrainLayers;
+  var scaledMaxBoardLength =
+      Math.max(scaledEndGrainLength, scaledEdgeGrainLength);
+  var dim = Math.max(scaledMaxBoardLength, scaledBoardWidth);
+  var edgeBoardCenterXOffset = (scaledEdgeGrainLength - dim) / 2;
+  var boardCenterYOffset = (scaledBoardWidth - dim) / 2;
+  var endBoardCenterXOffset = (scaledEndGrainLength - dim) / 2;
+  document.getElementById("OUTPUT_BOARD_WIDTH").innerHTML =
+    scaledBoardWidth / SCALE;
+  document.getElementById("OUTPUT_END_BOARD_LENGTH").innerHTML =
+    scaledEndGrainLength / SCALE;
+  document.getElementById("OUTPUT_EDGE_BOARD_LENGTH").innerHTML =
+    scaledEdgeGrainLength / SCALE;
+  document.getElementById("OUTPUT_SLICES").innerHTML = endgrainLayers;
+  document.getElementById("OUTPUT_LEFT_OVER").innerHTML =
+      endgrainLeftover.toPrecision(3);
+  outputWoodUsed(woodUsed, woodInfos);
+  svgEdgeG.parentNode.setAttribute("viewBox", edgeBoardCenterXOffset + " " +
+      boardCenterYOffset + " " + dim + " " + dim);
+  svgEndG.parentNode.setAttribute("viewBox", endBoardCenterXOffset + " " +
+      boardCenterYOffset + " " + dim + " " + dim);
+}
+
+function recalculate() {
+  var layers = getAllLayerInfos();
+  var woods = getAllWoodInfos();
+  drawLayers(layers, woods);
+}
+
+var recalcDepth = 0;
+function pushNoRecalculate() {
+  assert(recalcDepth >= 0);
+  ++recalcDepth;
+}
+
+function popNoRecalculate() {
+  assert(recalcDepth >= 0);
+  if (!--recalcDepth) {
+    recalculate();
+  }
+}
+
+function suggestRecalc() {
+  if (!recalcDepth) {
+    recalculate();
+  }
+}
+
+function setStateFromData(woods, layers) {
+  pushNoRecalculate();
+  try {
+    clearAllLayers();
+    var body = document.getElementById("WOOD_INFO_BODY");
+    // TODO: Merge woods instead of replacing them, overwriting same-name woods
+    // but leaving the rest.  Consider sorting the list alphabetically, too.
+    body.parentNode.replaceChild(body.cloneNode(false), body);
+
+    for (var i = 0; i < woods.length; ++i) {
+      var woodInfo = woods[i];
+      addWoodToDOM(woodInfo.name, woodInfo.color);
+    }
+
+    for (var i = 0; i < layers.length; ++i) {
+      var layerInfo = layers[i];
+      addLayerToDOM(layerInfo.woodIndex, layerInfo.width,
+          layerInfo.trailingAngle);
+    }
+  } finally {
+    popNoRecalculate();
+  }
+}
+
+function getSplitChar(majorVersion) {
+  if (majorVersion == '1') {
+    return '^';
+  }
+  return ',';
+}
+
+function getStateAsArgs() {
+  // TODO: Should we only export woods in use?
+  var state = ["v=" + VERSION];
+  var inputs = document.getElementsByClassName("export");
+  inputs = Array.prototype.slice.call(inputs);
+  for (var i in inputs) {
+    var input = inputs[i];
+    if (input.type.toLowerCase() == 'checkbox') {
+      state.push(input.id + "=" + (input.checked ? 1 : 0));
+    } else if (input.getAttribute("type") == 'number') {
+      state.push(input.id + "=" + input.value);
+    } else {
+      assert(false);
+    }
+  }
+  var woods = getAllWoodInfos();
+  var splitChar = getSplitChar(versionInfo.protocol);
+  t = [];
+  for (var i = 0; i < woods.length; ++i) {
+    var w = woods[i];
+    var c = w.color.substring(1); 
+    var n = encodeURIComponent(w.name);
+    t.push(c + splitChar + n);
+  }
+  state.push('w=' + t.join('|'));
+  var layers = getAllLayerInfos();
+  t = [];
+  for (var i = 0; i < layers.length; ++i) {
+    var l = layers[i];
+    t.push(l.woodIndex + splitChar + l.width + splitChar + l.trailingAngle);
+  }
+  state.push('l=' + t.join('|'));
+
+  return state.join('&');
+}
+
+function setStateFromArgString(str) {
+  pushNoRecalculate();
+  try {
+    var state = str.split('&');
+    var woodInfos = [];
+    var layerInfos = [];
+    var majorVersion;
+    for (var i in state) {
+      var s = state[i];
+      if (s.indexOf("v=") == 0) {
+        var triplet = s.substring(2).split('.');
+        majorVersion = triplet[0];
+        if (majorVersion != '1' && majorVersion != '2') {
+          alert("Your bookmark is too new for this version of the code; " +
+              "please upgrade.");
+          assert(false);
+        }
+      } else if (s.indexOf("w=") == 0) {
+        assert(!woodInfos.length);
+        var pairs = s.substring(2).split('|');
+        for (var ip in pairs) {
+          var pair = pairs[ip].split(getSplitChar(majorVersion));
+          woodInfos.push(new WoodInfo(
+              '#' + pair[0],
+              decodeURIComponent(pair[1]).replace(/%3D/g, '=')));
+        }
+      } else if (s.indexOf("l=") == 0) {
+        assert(!layerInfos.length);
+        var triplets = s.substring(2).split('|');
+        for (var ip in triplets) {
+          var triplet = triplets[ip].split(getSplitChar(majorVersion));
+          layerInfos.push(new LayerInfo(
+              triplet[0], triplet[1], triplet[2]));
+        }
+      } else {
+        var pair = s.split('=');
+        var id = pair[0];
+        var value = pair[1];
+        var elt = document.getElementById(id);
+        assert(elt);
+        if (elt.type == 'checkbox') {
+          elt.checked = value == '1';
+        } else if (elt.getAttribute("type") == 'number') {
+          elt.value = value;
+        } else {
+          assert(false);
+        }
+      }
+    }
+
+    setStateFromData(woodInfos, layerInfos);
+  } finally {
+    popNoRecalculate();
+  }
+}
+
+function getURL() {
+  var arg = getStateAsArgs();
+  var loc = window.location.toString();
+  var query = loc.indexOf('?');
+  if (query >= 0) {
+    loc = loc.substring(0, query);
+  }
+  loc += '?' + arg;
+  var a = document.createElement('a');
+  a.setAttribute('href', loc);
+  a.appendChild(document.createTextNode("Copy or bookmark this link."));
+  var elt = document.getElementById('OUTPUT_URL');
+  if (elt.firstChild) {
+    elt.replaceChild(a, elt.firstChild);
+  } else {
+    elt.appendChild(a);
+  }
+//  window.open(loc);
+}
+
+function getVersionInfo(version) {
+  var a = version.split('.');
+  return { protocol: a[0], major: a[1], minor: a[2], mini: a[3] };
+}
+
+function getPrettyVersionString(versionInfo) {
+  return versionInfo.major + "." + versionInfo.minor + "." + versionInfo.mini;
+}
+
+var versionInfo;
+function init() {
+  versionInfo = getVersionInfo(VERSION);
+  document.getElementById("VERSION_DISPLAY").appendChild(
+      document.createTextNode(getPrettyVersionString(versionInfo)));
+  var str = window.location.search.substring(1);
+  if (str.length) {
+    try {
+      setStateFromArgString(str);
+      return;
+    } catch (ex) {
+      alert("Invalid state in query string; " +
+            "using defaults for woods and layers.");
+    }
+  }
+  setStateFromData(DEFAULT_WOODS, SAMPLE_LAYERS);
+}
+
+init();
+
+</script>
+<!-- Start of StatCounter Code; if you clone this project, you might want to
+remove this.  If you run from a local copy at a file: URL, it's turned off. -->
+<script type="text/javascript">
+if (window.location.protocol != "file:") {
+  var sc_project=9325090;
+  var sc_invisible=1;
+  var sc_security="d9c7877d";
+  var scJsHost = (("https:" == document.location.protocol) ?
+  "https://secure." : "http://www.");
+  document.write("<sc"+"ript type='text/javascript' src='" + scJsHost+
+  "statcounter.com/counter/counter.js'></"+"script>");
+}
+</script>
+<noscript><div class="statcounter"><a title="website statistics"
+href="http://statcounter.com/free-web-stats/" target="_blank"><img
+class="statcounter" src="http://c.statcounter.com/9325090/0/d9c7877d/1/"
+alt="website statistics"></a></div></noscript>
+<!-- End of StatCounter Code -->
+</body>
+</html>
