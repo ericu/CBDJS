@@ -149,8 +149,8 @@ Floor, Boston, MA 02110-1301, USA.
 </div>
 <div style="display: block; float: left; padding: 4px">
   This is Cutting Board Designer JS version <span id="VERSION_DISPLAY"></span>.
-  You can find the latest version linked from <a
-  href="http://ofb.net/~uranium/projects/">my projects page</a>.
+  Here's a link to <a href="https://ericu.github.io/CBDJS/cb.html">the latest
+  version</a>.
 </div>
 <!--
 <button type=button style="display: inline-block; float: bottom"
@@ -614,6 +614,7 @@ function drawLayers(layerInfos, woodInfos) {
          sourceThickness * Math.tan(layerInfo.trailingAngle * Math.PI / 180)
         ) * SCALE;
     if (newRightY < rightY) {
+      // TODO: Alerts are really annoying.  Make a status display area.
       alert("The trailing angle of layer " + (i + 1) +
           " is too low, or the trailing angle of layer " + i +
           " is too high.  This causes a bad cut.");
