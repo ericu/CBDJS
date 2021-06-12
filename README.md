@@ -1,2 +1,3 @@
 # CBDJS
-This is a simple tool for designing end-grain cutting boards.
+This is a <a href="./cbdjs.html">simple tool for designing end-grain cutting
+boards</a>.
