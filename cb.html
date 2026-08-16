@@ -891,6 +891,12 @@ function saveWoods() {
 }
 
 function loadWoods() {
+  var woods = loadWoodList();
+
+  setStateFromData(woods, getAllLayerInfos());
+}
+
+function loadWoodList() {
   var arg = localStorage.getItem('woods');
 
   if (arg) {
@@ -903,7 +909,11 @@ function loadWoods() {
       woods.push(new WoodInfo("#" + wood[0], decodeURIComponent(wood[1])));
     }
 
-    setStateFromData(woods, getAllLayerInfos());
+    return woods;
+  }
+
+  else {
+    return DEFAULT_WOODS;
   }
 }
 
@@ -922,7 +932,7 @@ function init() {
             "using defaults for woods and layers.");
     }
   }
-  setStateFromData(DEFAULT_WOODS, SAMPLE_LAYERS);
+  setStateFromData(loadWoods(), SAMPLE_LAYERS);
 }
 
 init();
