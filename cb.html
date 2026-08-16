@@ -72,7 +72,7 @@ Floor, Boston, MA 02110-1301, USA.
         </table>
         <button type=button style="display: inline-block"
             onclick="addDefaultWood()">Add Wood</button>
-        <button type=button style="display: inline-block"
+        <button id="resetWoods" type=button style="display: inline-block"
             onclick="resetWoods()">Reset Woods</button>
         <button type=button style="display: inline-block"
             onclick="saveWoods()">Save Woods</button>
@@ -873,8 +873,10 @@ function getPrettyVersionString(versionInfo) {
 };
 
 function resetWoods() {
-  localStorage.removeItem('woods');
-  setStateFromData(DEFAULT_WOODS, getAllLayerInfos());
+  if (window.confirm("Do you want to reset all woods to default?")) {
+      localStorage.removeItem('woods');
+      setStateFromData(DEFAULT_WOODS, getAllLayerInfos());
+  }
 }
 
 function saveWoods() {
