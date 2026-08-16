@@ -873,7 +873,7 @@ function getPrettyVersionString(versionInfo) {
 };
 
 function resetWoods() {
-  if (window.confirm("Do you want to reset all woods to default?")) {
+  if (window.confirm('Do you want to reset all woods to default?')) {
       localStorage.removeItem('woods');
       setStateFromData(DEFAULT_WOODS, getAllLayerInfos());
   }
@@ -888,6 +888,7 @@ function saveWoods() {
 
     if (arg.startsWith('w=')) {
       localStorage.setItem('woods', arg.substring(2));
+      window.alert('Wood list saved');
     }
   }
 }
