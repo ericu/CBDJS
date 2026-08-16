@@ -72,6 +72,12 @@ Floor, Boston, MA 02110-1301, USA.
         </table>
         <button type=button style="display: block"
             onclick="addDefaultWood()">Add Wood</button>
+        <button type=button style="display: block"
+            onclick="resetWoods()">Reset Woods</button>
+        <button type=button style="display: block"
+            onclick="saveWoods()">Save Woods</button>
+        <button type=button style="display: block"
+            onclick="loadWoods()">Load Woods</button>
       </div>
       <div style="display: inline-block; float:left; padding: 4px;">
         <div style="display: block;">
@@ -183,7 +189,7 @@ function WoodInfo(color, name) {
   this.name = name;
 }
 
-var VERSION = "2.1.0.3";
+var VERSION = "2.1.0.4";
 
 var DEFAULT_WOODS = [
   new WoodInfo("#6F0011", "Cherry"),
@@ -864,6 +870,41 @@ function getVersionInfo(version) {
 
 function getPrettyVersionString(versionInfo) {
   return versionInfo.major + "." + versionInfo.minor + "." + versionInfo.mini;
+};
+
+function resetWoods() {
+  localStorage.removeItem('woods');
+  setStateFromData(DEFAULT_WOODS, getAllLayerInfos());
+}
+
+function saveWoods() {
+  var args = getStateAsArgs();
+  var argList = args.split('&');
+
+  for (var index = 0; index < argList.length; index++) {
+    var arg = argList[index];
+
+    if (arg.startsWith('w=')) {
+      localStorage.setItem('woods', arg.subString(2));
+    }
+  }
+}
+
+function loadWoods() {
+  var arg = localStorage.getItem('woods');
+
+  if (arg) {
+    var woods = [];
+    var woodList = arg.split('|');
+
+    for (var index = 0; index < woodList.length; index++) {
+      var wood = woodList[index].split(',');
+
+      woods.push(new WoodInfo("#" + wood[0), wood[1]);
+    }
+
+    setStateFromData(woods, getAllLayerInfos());
+  }
 }
 
 var versionInfo;
