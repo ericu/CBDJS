@@ -885,7 +885,7 @@ function saveWoods() {
     var arg = argList[index];
 
     if (arg.startsWith('w=')) {
-      localStorage.setItem('woods', arg.subString(2));
+      localStorage.setItem('woods', arg.substring(2));
     }
   }
 }
