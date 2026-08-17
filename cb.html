@@ -872,8 +872,23 @@ function getPrettyVersionString(versionInfo) {
   return versionInfo.major + "." + versionInfo.minor + "." + versionInfo.mini;
 };
 
+// TODO: in general for these functions, the wood list will not match the
+//       URL, resulting in some odd behavior.  For example, if the wood
+//       list is reset, the URL may reflect the old list.  But, this is
+//       also a "feature" of the existing code.  E.g. if you add a wood,
+//       the URL won't reflect that.
+//
+//       The fix, at least for the load/save code is to load (after save)
+//       so that the wood list is restored.  But, it makes one wonder if
+//       the URL should be generated and redirected any time either the
+//       wood list or layer list changes to keep things consistent.
+//
+//       Also, the code below should probably wrap use of localStorage so
+//       that if local storage is disabled in some way, we fail gracefully.
+//       See, e.g., https://stackoverflow.com/questions/16427636/check-if-localstorage-is-available.
+
 function resetWoods() {
-  if (window.confirm('Do you want to reset all woods to default?')) {
+  if (window.confirm('Do you want to reset the wood list to default?')) {
       localStorage.removeItem('woods');
       setStateFromData(DEFAULT_WOODS, getAllLayerInfos());
   }
@@ -928,6 +943,7 @@ function init() {
   var str = window.location.search.substring(1);
   if (str.length) {
     try {
+      // TODO: should we load the saved wood list? (e.g. reload will reset the list).  See comments above about the URL.
       setStateFromArgString(str);
       return;
     } catch (ex) {
