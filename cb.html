@@ -75,9 +75,9 @@ Floor, Boston, MA 02110-1301, USA.
         <button id="resetWoods" type=button style="display: inline-block"
             onclick="resetWoods()">Reset Woods</button>
         <button type=button style="display: inline-block"
-            onclick="saveWoods()">Save Woods</button>
+            onclick="saveWoods()" disabled>Save Woods</button>
         <button type=button style="display: inline-block"
-            onclick="loadWoods()">Load Woods</button>
+            onclick="loadWoods()" disabled>Load Woods</button>
       </div>
       <div style="display: inline-block; float:left; padding: 4px;">
         <div style="display: block;">
@@ -887,23 +887,29 @@ function getPrettyVersionString(versionInfo) {
 //       that if local storage is disabled in some way, we fail gracefully.
 //       See, e.g., https://stackoverflow.com/questions/16427636/check-if-localstorage-is-available.
 
+const woodsKey = 'woods';
+
 function resetWoods() {
   if (window.confirm('Do you want to reset the wood list to default?')) {
-      localStorage.removeItem('woods');
-      setStateFromData(DEFAULT_WOODS, getAllLayerInfos());
+    if (isLSEnabled()) {
+      localStorage.removeItem(woodsKey);
+    }
+    setStateFromData(DEFAULT_WOODS, getAllLayerInfos());
   }
 }
 
 function saveWoods() {
-  var args = getStateAsArgs();
-  var argList = args.split('&');
+  if (isLSEnabled()) {
+    var args = getStateAsArgs();
+    var argList = args.split('&');
 
-  for (var index = 0; index < argList.length; index++) {
-    var arg = argList[index];
+    for (var index = 0; index < argList.length; index++) {
+      var arg = argList[index];
 
-    if (arg.startsWith('w=')) {
-      localStorage.setItem('woods', arg.substring(2));
-      window.alert('Wood list saved');
+      if (arg.startsWith('w=')) {
+        localStorage.setItem(woodsKey, arg.substring(2));
+        window.alert('Wood list saved');
+      }
     }
   }
 }
@@ -915,23 +921,36 @@ function loadWoods() {
 }
 
 function loadWoodList() {
-  var arg = localStorage.getItem('woods');
+  if (isLSEnabled()) {
+     var arg = localStorage.getItem(woodsKey);
 
-  if (arg) {
-    var woods = [];
-    var woodList = arg.split('|');
+    if (arg) {
+      var woods = [];
+      var woodList = arg.split('|');
 
-    for (var index = 0; index < woodList.length; index++) {
-      var wood = woodList[index].split(',');
+      for (var index = 0; index < woodList.length; index++) {
+        var wood = woodList[index].split(',');
 
-      woods.push(new WoodInfo("#" + wood[0], decodeURIComponent(wood[1])));
+        woods.push(new WoodInfo("#" + wood[0], decodeURIComponent(wood[1])));
+      }
+
+      return woods;
     }
-
-    return woods;
   }
 
-  else {
-    return DEFAULT_WOODS;
+  return DEFAULT_WOODS;
+}
+
+function isLSEnabled() {
+  const key = '__storage_test__';
+
+  try {
+    localStorage.setItem(key, key);
+    localStorage.removeItem(key);
+    return true;
+  }
+  catch(e) {
+    return false;
   }
 }
 
@@ -940,6 +959,10 @@ function init() {
   versionInfo = getVersionInfo(VERSION);
   document.getElementById("VERSION_DISPLAY").appendChild(
       document.createTextNode(getPrettyVersionString(versionInfo)));
+  if (isLSEnabled()) {
+    document.getElementById("loadWoods").disabled = false;
+    document.getElementById("saveWoods").disabled = false;
+  }
   var str = window.location.search.substring(1);
   if (str.length) {
     try {
