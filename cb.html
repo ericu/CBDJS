@@ -929,7 +929,7 @@ function loadWoods() {
 }
 
 function sortWoodsByName() {
-  var woods = loadWoodList();
+  var woods = getAllWoodInfos();
   var sortedWoods = woods.toSorted((rhs, lhs) => nameOrder * rhs.name.localeCompare(lhs.name));
  
   fixupLayerColors(woods, sortedWoods);
@@ -938,7 +938,7 @@ function sortWoodsByName() {
 }
 
 function sortWoodsByColor() {
-  var woods = loadWoodList();
+  var woods = getAllWoodInfos():
   var sortedWoods = woods.toSorted((rhs, lhs) => colorOrder * rhs.color.localeCompare(lhs.color));
 
   fixupLayerColors(woods, sortedWoods);
