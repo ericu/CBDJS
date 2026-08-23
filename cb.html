@@ -950,16 +950,21 @@ function fixupLayerColors(unsortedWoods, sortedWoods) {
   var layers = getAllLayerInfos();
   var woodsMap = new Map();
 
-  // Map woods names to the new index
+  // Map wood names to the new index
   for (let index in sortedWoods) {
     woodsMap.set(sortedWoods[index].name, index);
   }
 
- // Re-index the layer woods
- for (let index in layers) {
-   var layer = layers[index];
+  // Re-index the layer woods
+  for (let index in layers) {
+    var layer = layers[index];
+    var oldIndex = layer.woodIndex;
+    var newIndex = woodsMap.get(unsortedWoods[layer.woodIndex].name);
+    var oldWood = unsortedWoods[oldIndex];
+    var newWood = sortedWoods[newIndex];
 
-   layer.woodIndex = woodsMap.get(unsortedWoods[layer.woodIndex].name);
+    layer.woodIndex = woodsMap.get(unsortedWoods[layer.woodIndex].name);
+      console.log("Layer " + index + ": old wood index " + oldIndex + " new wood index " + newIndex + " old wood " + oldWood.name + " new wood " + newWood.name);
   }
 
   setStateFromData(sortedWoods, layers);
