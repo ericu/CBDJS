@@ -72,8 +72,12 @@ Floor, Boston, MA 02110-1301, USA.
         </table>
         <button type=button style="display: inline-block"
             onclick="addDefaultWood()">Add Wood</button>
-        <button id="resetWoods" type=button style="display: inline-block"
+        <button type=button style="display: inline-block"
             onclick="resetWoods()">Reset Woods</button>
+        <button type=button style="display: inline-block"
+            onclick="sortWoodsByName()">Sort Woods (Name)</button>
+        <button type=button style="display: inline-block"
+            onclick="sortWoodsByColor()">Sort Woods (Color)</button>
         <button id="saveWoods" type=button style="display: inline-block"
             onclick="saveWoods()" disabled>Save Woods</button>
         <button id="loadWoods" type=button style="display: inline-block"
@@ -888,6 +892,8 @@ function getPrettyVersionString(versionInfo) {
 //       See, e.g., https://stackoverflow.com/questions/16427636/check-if-localstorage-is-available.
 
 const woodsKey = 'woods';
+var colorOrder = 1;
+var nameOrder = 1;
 
 function resetWoods() {
   if (window.confirm('Do you want to reset the wood list to default?')) {
@@ -918,6 +924,41 @@ function loadWoods() {
   var woods = loadWoodList();
 
   setStateFromData(woods, getAllLayerInfos());
+}
+
+function sortWoodsByName() {
+  var sortedWoods = woods.toSorted((rhs, lhs) => nameOrder * rhs.name.localeCompare(lhs.name));
+ 
+  fixupLayerColors(woods, sortedWoods);
+
+  nameOrder *= -1;
+}
+
+function sortWoodsByColor() {
+  var sortedWoods = woods.toSorted((rhs, lhs) => colorOrder * rhs.color.localeCompare(lhs.color));
+
+  fixupLayerColors(woods, sortedWoods);
+
+  colorOrder *= -1;
+}
+
+function fixupLayerColors(unsortedWoods, sortedWoods) {
+  var layers = getAllLayerInfos();
+  var woodsMap = new Map();
+
+  // Map woods names to the new index
+  for (let index in sortedWoods) {
+    woodsMap.set(sortedWoods[index].name, index);
+  }
+
+ // Re-index the layer woods
+ for (let index in layers) {
+   var layer = layers[index];
+
+   layer.woodIndex = woodsMap.get(unsortedWoods[layer.woodIndex].name);
+  }
+
+  setStateFromData(sortedWoods, layers);
 }
 
 function loadWoodList() {
