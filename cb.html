@@ -938,7 +938,7 @@ function sortWoodsByName() {
 }
 
 function sortWoodsByColor() {
-  var woods = getAllWoodInfos():
+  var woods = getAllWoodInfos();
   var sortedWoods = woods.toSorted((rhs, lhs) => colorOrder * rhs.color.localeCompare(lhs.color));
 
   fixupLayerColors(woods, sortedWoods);
