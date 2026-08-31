@@ -70,8 +70,20 @@ Floor, Boston, MA 02110-1301, USA.
           <tbody id="WOOD_INFO_BODY">
           </tbody>
         </table>
-        <button type=button style="display: block"
-            onclick="addDefaultWood()">Add Wood</button>
+        <button type=button style="display: inline-block"
+          onclick="addDefaultWood()">Add Wood</button>
+        <button type=button style="display: inline-block"
+          onclick="resetWoods()">Reset Woods</button>
+        <button id="saveWoods" type=button style="display: inline-block"
+          onclick="saveWoods()" disabled>Save Woods</button>
+        <button id="loadWoods" type=button style="display: inline-block"
+          onclick="loadWoods()" disabled>Load Woods</button>
+        <div>
+          <button type=button style="display: inline-block"
+            onclick="sortWoodsByName()">Sort Woods (Name)</button>
+          <button type=button style="display: inline-block"
+            onclick="sortWoodsByColor()">Sort Woods (Color)</button>
+        </div>
       </div>
       <div style="display: inline-block; float:left; padding: 4px;">
         <div style="display: block;">
@@ -183,7 +195,7 @@ function WoodInfo(color, name) {
   this.name = name;
 }
 
-var VERSION = "2.1.0.3";
+var VERSION = "2.1.0.4";
 
 var DEFAULT_WOODS = [
   new WoodInfo("#6F0011", "Cherry"),
@@ -864,6 +876,127 @@ function getVersionInfo(version) {
 
 function getPrettyVersionString(versionInfo) {
   return versionInfo.major + "." + versionInfo.minor + "." + versionInfo.mini;
+};
+
+// TODO: in general for these functions, the wood list will not match the
+//       URL, resulting in some odd behavior.  For example, if the wood
+//       list is reset, the URL may reflect the old list.  But, this is
+//       also a "feature" of the existing code.  E.g. if you add a wood,
+//       the URL won't reflect that.
+//
+//       The fix, at least for the load/save code is to load (after save)
+//       so that the wood list is restored.  But, it makes one wonder if
+//       the URL should be generated and redirected any time either the
+//       wood list or layer list changes to keep things consistent.
+//
+//       Also, the code below wraps use of localStorage so that if local
+//       storage is disabled in some way, we fail gracefully.
+//       See, e.g., https://stackoverflow.com/questions/16427636/check-if-localstorage-is-available.
+
+const woodsKey = 'woods';
+var colorOrder = 1;
+var nameOrder = 1;
+
+function resetWoods() {
+  if (window.confirm('Do you want to reset the wood list to default?')) {
+    if (isLSEnabled()) {
+      localStorage.removeItem(woodsKey);
+    }
+    setStateFromData(DEFAULT_WOODS, getAllLayerInfos());
+  }
+}
+
+function saveWoods() {
+  if (isLSEnabled()) {
+    var args = getStateAsArgs();
+    var argList = args.split('&');
+
+    for (var index = 0; index < argList.length; index++) {
+      var arg = argList[index];
+
+      if (arg.startsWith('w=')) {
+        localStorage.setItem(woodsKey, arg.substring(2));
+        window.alert('Wood list saved');
+      }
+    }
+  }
+}
+
+function loadWoods() {
+  var woods = loadWoodList();
+
+  setStateFromData(woods, getAllLayerInfos());
+}
+
+function sortWoodsByName() {
+  var woods = getAllWoodInfos();
+  var sortedWoods = woods.toSorted((rhs, lhs) => nameOrder * rhs.name.localeCompare(lhs.name));
+ 
+  fixupLayerColors(woods, sortedWoods);
+
+  nameOrder *= -1;
+}
+
+function sortWoodsByColor() {
+  var woods = getAllWoodInfos();
+  var sortedWoods = woods.toSorted((rhs, lhs) => colorOrder * rhs.color.localeCompare(lhs.color));
+
+  fixupLayerColors(woods, sortedWoods);
+
+  colorOrder *= -1;
+}
+
+function fixupLayerColors(unsortedWoods, sortedWoods) {
+  var layers = getAllLayerInfos();
+  var woodsMap = new Map();
+
+  // Map wood names to the new index
+  for (let index in sortedWoods) {
+    woodsMap.set(sortedWoods[index].name, index);
+  }
+
+  // Re-index the layer woods
+  for (let index in layers) {
+    var layer = layers[index];
+
+    layer.woodIndex = woodsMap.get(unsortedWoods[layer.woodIndex].name);
+  }
+
+  setStateFromData(sortedWoods, layers);
+}
+
+function loadWoodList() {
+  if (isLSEnabled()) {
+     var arg = localStorage.getItem(woodsKey);
+
+    if (arg) {
+      var woods = [];
+      var woodList = arg.split('|');
+
+      for (var index = 0; index < woodList.length; index++) {
+        var wood = woodList[index].split(',');
+
+        woods.push(new WoodInfo("#" + wood[0], decodeURIComponent(wood[1])));
+      }
+
+      return woods;
+    }
+  }
+
+  return DEFAULT_WOODS;
+}
+
+function isLSEnabled() {
+  const key = '__storage_test__';
+
+  try {
+    localStorage.setItem(key, key);
+    localStorage.removeItem(key);
+    return true;
+  }
+  catch(e) {
+    return false;
+  }
 }
 
 var versionInfo;
@@ -871,9 +1004,14 @@ function init() {
   versionInfo = getVersionInfo(VERSION);
   document.getElementById("VERSION_DISPLAY").appendChild(
       document.createTextNode(getPrettyVersionString(versionInfo)));
+  if (isLSEnabled()) {
+    document.getElementById("loadWoods").disabled = false;
+    document.getElementById("saveWoods").disabled = false;
+  }
   var str = window.location.search.substring(1);
   if (str.length) {
     try {
+      // TODO: should we load the saved wood list? (e.g. reload will reset the list).  See comments above about the URL.
       setStateFromArgString(str);
       return;
     } catch (ex) {
@@ -881,7 +1019,7 @@ function init() {
             "using defaults for woods and layers.");
     }
   }
-  setStateFromData(DEFAULT_WOODS, SAMPLE_LAYERS);
+  setStateFromData(loadWoodList(), SAMPLE_LAYERS);
 }
 
 init();
